@@ -11,19 +11,12 @@ def parse_args():
                         nargs='+',
                         default=None,
                         help='runids to create')
-    parser.add_argument('--stop', dest='stop', action='store_const',
-                        const=True, default=False,
-                        help='Stop Tensorflow')
 
     return parser.parse_args()
 
 args = parse_args()
 
 print(args)
-
-if args.stop:
-#    tb = Tensorboard()
-    Tensorboard([]).stop()
 
 elif args.runids:
     # get workspace
@@ -39,6 +32,8 @@ elif args.runids:
         runs.append(run)
     tb = Tensorboard(runs)
     tb.start()
+
+    ## Wait for input to stop tensorboard.
     print('Enter to stop tensorboard')
     input()
     tb.stop()

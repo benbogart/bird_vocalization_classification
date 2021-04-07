@@ -13,6 +13,12 @@ def parse_args():
                         action='store_const',
                         const=True, default=False,
                         help='Create a new workspace')
+
+    parser.add_argument('--subscription-id', type=str,
+                            dest='subscription-id',
+                            default='',
+                            help='Subscription id for creating a workspace')
+
     parser.add_argument('--create-compute', dest='create_compute', action='store_const',
                         const=True, default=False,
                         help='Create a new compoute instance')
@@ -31,8 +37,25 @@ def parse_args():
 
     return parser.parse_args()
 
+def create_ws(subscription_id):
+    '''Creates an azure workspace'''
+
+    subscription_id = subscription_id
+    resource_group = 'birdsong_classification'
+    workspace_name = 'birdsong_classification'
+
+    workspace = Workspace.create(name=workspace_name,
+                   subscription_id=subscription_id,
+                   resource_group=resource_group,
+                   create_resource_group=True,
+                   location='northcentralus'
+                   )
+
+    workspace.write_config(path='.azureml')
 
 def create_compute(ws):
+    '''Creates an azure compute cluster'''
+
     # the name for the cluster
     compute_name = "gpu-cluster-NC6"
     # the reference to the azure machine type
@@ -47,6 +70,8 @@ def create_compute(ws):
 
 
 def create_env(ws):
+    '''Creates an azureml enviornment'''
+
     env = Environment(name='birdsong-env-gpu')
 
     # define packages for image
@@ -61,12 +86,6 @@ def create_env(ws):
                                  conda_packages=['SciPy'])
 
     env.python.conda_dependencies = cd
-
-    # Specify a docker image to use.
-    # env.docker.enabled = True
-    # env.docker.base_image = (
-    #     "mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.0.3-cudnn8-ubuntu18.04"
-    # )
 
     dockerfile = r'''
 # Copyright (c) Microsoft Corporation. All rights reserved.
@@ -214,6 +233,8 @@ RUN apt-get update && \
 
 
 def upload_data(ws):
+    '''upload data to the default azure datastore'''
+    
     datastore = ws.get_default_datastore()
 
     # upload the data to the datastore
@@ -240,18 +261,10 @@ if __name__ == '__main__':
     print('ARGS:', args)
 
     if args.create_workspace:
-        subscription_id = '6b443b21-01ef-4f24-91c6-70c888c1cb50'
-        resource_group = 'birdsong_classification'
-        workspace_name = 'birdsong_classification'
 
-        workspace = Workspace.create(name=workspace_name,
-                       subscription_id=subscription_id,
-                       resource_group=resource_group,
-                       create_resource_group=True,
-                       location='northcentralus'
-                       )
+        print('Creating workspace...')
+        create_ws(args.subscription_id)
 
-        workspace.write_config(path='.azureml')
 
     # get the workspace
     ws = Workspace.from_config()
