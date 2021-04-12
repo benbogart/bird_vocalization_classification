@@ -18,7 +18,7 @@ args = parse_args()
 
 print(args)
 
-elif args.runids:
+if args.runids:
     # get workspace
     ws = Workspace.from_config()
 

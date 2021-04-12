@@ -23,6 +23,10 @@ def parse_args():
                         const=True, default=False,
                         help='Create a new compoute instance')
 
+    parser.add_argument('--gpus', dest='gpus',
+                        type=int, default=2,
+                        help='Number of gpus to provision')
+
     parser.add_argument('--create-env', dest='create_env', action='store_const',
                         const=True, default=False,
                         help='Create a new enviornment definition')
@@ -53,21 +57,34 @@ def create_ws(subscription_id):
 
     workspace.write_config(path='.azureml')
 
-def create_compute(ws):
+def create_compute(ws, gpus):
     '''Creates an azure compute cluster'''
 
-    # the name for the cluster
-    compute_name = "gpu-cluster-NC6"
-    # the reference to the azure machine type
-    vm_size = 'Standard_NC6_Promo'
+    if gpus == 1:
+        # # the name for the cluster
+        compute_name = "gpu-cluster-NC6"
+        # # the reference to the azure machine type
+        vm_size = 'Standard_NC6_Promo'
+    elif gpus == 2:
+        # the name for the cluster
+        compute_name = "gpu-cluster-NC12"
+        # the reference to the azure machine type
+        vm_size = 'Standard_NC12_Promo'
+    elif gpus == 4:
+        # the name for the cluster
+        compute_name = "gpu-cluster-NC24"
+        # the reference to the azure machine type
+        vm_size = 'Standard_NC24_Promo'
+    else:
+        print(gpus, 'is not a valid number of GPUs.  No compute was created')
+        return
+
     # define the cluster and the max and min number of nodes
     provisioning_config = AmlCompute.provisioning_configuration(vm_size = vm_size,
                                                                 min_nodes = 0,
                                                                 max_nodes = 10)
     # create the cluster
     compute_target = ComputeTarget.create(ws, compute_name, provisioning_config)
-
-
 
 def create_env(ws):
     '''Creates an azureml enviornment'''
@@ -231,15 +248,14 @@ RUN apt-get update && \
     # Register environment to re-use later
     env = env.register(workspace = ws)
 
-
 def upload_data(ws):
     '''upload data to the default azure datastore'''
-    
+
     datastore = ws.get_default_datastore()
 
     # upload the data to the datastore
-    datastore.upload(src_dir='../data/audio_split',
-                     target_path='/data/audio_split',
+    datastore.upload(src_dir='../data/audio_10sec',
+                     target_path='/data/audio_10sec',
                      overwrite=False,
                      show_progress=True)
 
@@ -247,7 +263,7 @@ def create_dataset(ws):
     '''create the dataset object'''
     datastore = ws.get_default_datastore()
 
-    dataset = Dataset.File.from_files(path=(datastore, 'data/audio_split/'))
+    dataset = Dataset.File.from_files(path=(datastore, 'data/audio_10sec/'))
 
     # register the dataset for future use
     dataset = dataset.register(workspace=ws,
@@ -271,7 +287,7 @@ if __name__ == '__main__':
 
     if args.create_compute:
         print('Creating Compute...')
-        create_compute(ws)
+        create_compute(ws, args.gpus)
 
     if args.create_env:
         print('Creating Enviornment...')
