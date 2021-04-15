@@ -8,7 +8,7 @@ import sys
 from azureml.core import Run
 from azureml.core import Workspace, Dataset
 
-from DataGenerator import DataGenerator
+from DataGenerator import DataGenerator, AugDataGenerator
 from LogToAzure import LogToAzure
 from tensorflow import keras as K
 from tensorflow.distribute import MirroredStrategy
@@ -19,12 +19,19 @@ from models import MODELS
 
 import json
 
+import subprocess
+
 def process_arguments():
 
     # parse the parameters passed to the this script
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-path', type=str,
                         dest='data_path',
+                        default='../../data/audio_10sec', #local path for testing
+                        help='data folder mounting point')
+
+    parser.add_argument('--test-data-path', type=str,
+                        dest='test_data_path',
                         default='../../data/audio_10sec', #local path for testing
                         help='data folder mounting point')
 
@@ -39,15 +46,32 @@ def process_arguments():
 
     parser.add_argument('--model-name', type=str,
                          dest='model_name',
-                         default='baseline',
+                         default='cnn1_audin_nmel_1',
                          help='name of model to build')
 
     parser.add_argument('--data-subset',
                         type=str,
                         dest='data_subset',
-                        choices=['all', 'kaggle'],
                         default='kaggle',
                         help='the subset of the data to use [all, kaggle].')
+
+    parser.add_argument('--augment-position',
+                        action='store_const',
+                        dest='augment_position',
+                        const=True, default=False,
+                        help='Whether to choose clip position randomly')
+
+    parser.add_argument('--augment-pitch',
+                        action='store_const',
+                        dest='augment_pitch',
+                        const=True, default=False,
+                        help='Whether to use pitch augmentation.')
+
+    parser.add_argument('--augment-stretch',
+                        action='store_const',
+                        dest='augment_stretch',
+                        const=True, default=False,
+                        help='Wether to use time stretch augmentation')
 
     parser.add_argument('--epochs',
                         type=int,
@@ -84,32 +108,67 @@ if args.online:
     run = Run.get_context()
     run.tag('model_name', args.model_name)
     run.tag('learning_rate', args.learning_rate)
+    run.tag('data_subset', args.data_subset)
 
     print('Environment:',run.get_environment().name)
     runid = run.id
+
+    logger_fname = f'outputs/{runid}-log_compute.csv'
+    logger_pid = subprocess.Popen(
+        ['python', 'log_gpu_cpu_stats.py',
+         logger_fname,
+         '--loop',  '0.2',  # Interval between measurements, in seconds (optional, default=1)
+        ])
+    print('Started logging compute utilisation, pid', logger_pid)
+
 # for an offline run just set the run id to offline
 else:
     runid = 'offline'
 
+
 # get dataset name
-if args.data_subset == 'kaggle':
+if args.data_subset == 'kaggle_10sec_wav':
     label_file = 'data_kag_split_single_label.json'
-elif args.data_subset == 'all':
+    ext = '.wav'
+
+elif args.data_subset == 'all_10sec_wav':
     label_file = 'data_split_single_label.json'
+    ext = '.wav'
+
+# elif args.data_subset == 'kaggle_full_length_wav':
+#     label_file = 'data_kag_split_single_label.json'
+#     # data_path = os.path.join(args.data_path, 'wav')
+#     ext = '.wav'
+#
+# elif args.data_subset == 'all_full_length_wav':
+#     label_file = 'data_split_single_label.json'
+#     # data_path = os.path.join(args.data_path, 'wav')
+#     ext = '.wav'
+
+elif args.data_subset == 'kaggle_full_length_npy':
+    label_file = 'data_kag_split_single_label.json'
+    ext = '.npy'
+
+elif args.data_subset == 'all_full_length_npy':
+    label_file = 'data_split_single_label.json'
+    ext = '.npy'
+
 else:
     raise Exception(f'Invalid data_subset: {args.data_subset}')
 
-# load json Files
-with open(os.path.join(args.data_path, 'resources', label_file), 'r') as f:
+
+with open(os.path.join('resources', label_file), 'r') as f:
     data =  json.load(f)
 
 # get file lists
-train_files = [os.path.join(args.data_path, name+'.wav')
+train_files = [os.path.join(args.data_path, name+ext)
                for name in data['train']['files']]
-val_files = [os.path.join(args.data_path, name+'.wav')
+val_files = [os.path.join(args.test_data_path, name+'.wav')
                for name in data['val']['files']]
-test_files = [os.path.join(args.data_path, name+'.wav')
+test_files = [os.path.join(args.test_data_path, name+'.wav')
                for name in data['test']['files']]
+
+# print(val_files)
 
 # get label lists
 train_labels = np.array(data['train']['encoded_labels'])
@@ -142,13 +201,51 @@ if args.online:
 
 # Create generators for importing the audio
 BATCH_SIZE = 32
-print('Creating DataGenerator')
-train_generator = DataGenerator(wav_paths=train_files,
-                                labels=train_labels,
-                                sr=sr,
-                                dt=dt,
-                                n_classes=len(classes),
-                                batch_size=BATCH_SIZE*n_gpus)
+
+
+if args.augment_position or args.augment_pitch or args.augment_stretch:
+    print('Creating train AugDataGenerator wtih pitch', args.augment_pitch,
+          'stretch', args.augment_stretch)
+    train_generator = AugDataGenerator(wav_paths=train_files[:32],
+                                       labels=train_labels[:32],
+                                       sr=sr,
+                                       dt=dt,
+                                       n_classes=len(classes),
+                                       # audio_segment=args.augment_position,
+                                       pitch_shift=args.augment_pitch,
+                                       time_stretch=args.augment_stretch,
+                                       multithread=args.multithread,
+                                       batch_size=BATCH_SIZE*n_gpus)
+    # print('Creating validation DataGenerator...')
+    # val_generator = AugDataGenerator(wav_paths=val_files,
+    #                                    labels=val_labels,
+    #                                    sr=sr,
+    #                                    dt=dt,
+    #                                    n_classes=len(classes),
+    #                                    audio_segment='start',
+    #                                    pitch_shift=False,
+    #                                    time_stretch=False,
+    #                                    batch_size=BATCH_SIZE*n_gpus)
+    #
+    #
+    # print('Creating test DataGenerator...')
+    # test_generator = AugDataGenerator(wav_paths=test_files,
+    #                                    labels=test_labels,
+    #                                    sr=sr,
+    #                                    dt=dt,
+    #                                    n_classes=len(classes),
+    #                                    audio_segment='start',
+    #                                    pitch_shift=False,
+    #                                    time_stretch=False,
+    #                                    batch_size=BATCH_SIZE*n_gpus)
+else:
+    print('Creating train DataGenerator')
+    train_generator = DataGenerator(wav_paths=train_files,
+                                    labels=train_labels,
+                                    sr=sr,
+                                    dt=dt,
+                                    n_classes=len(classes),
+                                    batch_size=BATCH_SIZE*n_gpus)
 
 print('Creating validation DataGenerator...')
 val_generator = DataGenerator(wav_paths=val_files, #[:32],
@@ -206,7 +303,7 @@ if args.online:
 
 # fit model and store history
 history = model.fit(train_generator,
-                    # steps_per_epoch=1, # only for quick testing
+                    steps_per_epoch=1, # only for quick testing
                     validation_data=val_generator,
                     epochs=args.epochs,
                     callbacks=callbacks)

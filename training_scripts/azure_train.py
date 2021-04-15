@@ -28,15 +28,40 @@ def process_arguments():
                         dest='gpus',
                         default=1,
                         help='number of gpus to use for training.')
-    parser.add_argument('--data_subset',
+    parser.add_argument('--data-subset',
                         type=str,
                         dest='data_subset',
-                        choices=['all', 'kaggle'],
-                        default='kaggle',
+                        default='kaggle_10sec_wav',
                         help='the subset of the data to use [all, kaggle].')
+
+    # parser.add_argument('--augment-position',
+    #                     action='store_const',
+    #                     dest='augment_position',
+    #                     const=True, default=False,
+    #                     help='Whether to choose clip position randomly')
+    parser.add_argument('--augment-position',
+                        action='store_const',
+                        dest='augment_position',
+                        const=True, default=False,
+                        help='Whether to choose clip position randomly')
+    parser.add_argument('--augment-pitch',
+                        action='store_const',
+                        dest='augment_pitch',
+                        const=True, default=False,
+                        help='Whether to use pitch augmentation.')
+    parser.add_argument('--augment-stretch',
+                        action='store_const',
+                        dest='augment_stretch',
+                        const=True, default=False,
+                        help='Wether to use time stretch augmentation')
+
     parser.add_argument('--test', dest='test', action='store_const',
                         const=True, default=False,
                         help='Use test expiriment')
+    parser.add_argument('--multithread', dest='multithread', action='store_const',
+                        const=True, default=False,
+                        help='Use test expiriment')
+
     args = parser.parse_args()
     return args
 
@@ -47,7 +72,12 @@ print(args)
 ws = Workspace.from_config()
 
 # Get the registered dataset from azure
-dataset = Dataset.get_by_name(ws, name='birdsongs')
+if args.data_subset.endswith('npy'):
+    train_dataset = Dataset.get_by_name(ws, name='birdsongs_npy')
+else:
+    train_dataset = Dataset.get_by_name(ws, name='birdsongs_10sec')
+
+val_test_dataset = Dataset.get_by_name(ws, name='birdsongs_10sec')
 
 ## Try with our saved image
 env = Environment.get(workspace=ws, name="birdsong-env-gpu")
@@ -72,10 +102,20 @@ else:
 compute_target = ws.compute_targets[compute_name]
 
 # set the args to pass to the training script on azure
-azure_args = ['--data-path', dataset.as_named_input('input').as_mount(),
+azure_args = ['--data-path', train_dataset.as_named_input('train').as_mount(), #.as_mount(),
+              '--test-data-path', val_test_dataset.as_named_input('test').as_mount(),
               '--model-name', args.model_name,
               '--epochs', args.epochs,
               '--data-subset', args.data_subset]
+
+if args.augment_position:
+    azure_args.append('--augment-position')
+if args.augment_pitch:
+    azure_args.append('--augment-pitch')
+if args.augment_stretch:
+    azure_args.append('--augment-stretch')
+if args.multithread:
+    azure_args.append('--multithread')
 
 script_path = 'remote'
 
