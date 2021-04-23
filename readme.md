@@ -1,6 +1,6 @@
 Bird Sound Classification
 
-![Blue-fronted redstart](images/blue-fronted redstart.jpeg)
+![Blue-fronted redstart](images/blue-fronted-redstart.jpeg)
 Image © Aaron Travers
 
 Note: For an interactive demo visit the [project dashboard](https://birdsong-classification.herokuapp.com/) on Heroku.
