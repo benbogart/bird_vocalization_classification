@@ -1,6 +1,5 @@
 import tensorflow.keras as K
 import kapre
-from SqueezeLayer import SqueezeLayer
 
 def construct_cnn1_audin_nmel_1():
     'n_mels'
@@ -164,28 +163,6 @@ def _construct_cnn1_audin(sample_rate, n_fft, n_mels, mel_f_min, mel_f_max, retu
 
     input_shape = (sample_rate * 10, 1) # mono 10 seconds at 22050hz
 
-
-    # kapre.composed.get_melspectrogram_layer(input_shape=input_shape,
-    #                                         n_fft=2048,
-    #                                         win_length=None,
-    #                                         hop_length=None,
-    #                                         window_name=None,
-    #                                         pad_begin=False,
-    #                                         pad_end=False,
-    #                                         sample_rate=22050,
-    #                                         n_mels=128,
-    #                                         mel_f_min=0.0,
-    #                                         mel_f_max=None,
-    #                                         mel_htk=False,
-    #                                         mel_norm='slaney',
-    #                                         return_decibel=False,
-    #                                         db_amin=1e-05,
-    #                                         db_ref_value=1.0,
-    #                                         db_dynamic_range=80.0,
-    #                                         input_data_format='default',
-    #                                         output_data_format='default',
-    #                                         name='melspectrogram')
-
     model = K.Sequential()
     composed_melgram_layer = \
         kapre.composed.get_melspectrogram_layer(input_shape=input_shape,
@@ -247,7 +224,7 @@ def construct_cnn1_audin_l2reg_4():
     return _construct_cnn1_audin_l2reg(lam = 0.1)
 
 def _construct_cnn1_audin_l2reg(lam = .0001):
-    '''Addin regularization for overfitting'''
+    '''Add in regularization for overfitting'''
 
     sample_rate = 22050
     n_fft = 2048 # frame size
@@ -319,8 +296,7 @@ def construct_cnn1_audin_drp_4():
     return _construct_cnn1_audin_drp(rate = 0.5)
 
 def _construct_cnn1_audin_drp(rate = 0.3):
-
-    '''Addin regularization for overfitting'''
+    '''Add Dropout for overfitting'''
 
     sample_rate = 22050
     n_fft = 2048 # frame size
@@ -415,6 +391,7 @@ def construct_milsed_7block_dense_drp_4():
     return _construct_milsed_block(5, 0.5)
 
 def _construct_milsed_block(num_blocks, dropout_rate = False):
+    '''Variable Convolution Block model inspired by milsed'''
 
     sample_rate = 22050
     input_shape = (sample_rate * 10, 1) # mono 10 seconds at 22050hz
@@ -473,65 +450,6 @@ def _construct_milsed_block(num_blocks, dropout_rate = False):
 
     return model
 
-def _construct_milsed_block_rnn(num_blocks=2):
-
-    sample_rate = 22050
-    input_shape = (sample_rate * 10, 1) # mono 10 seconds at 22050hz
-    n_fft = 2048 # frame size
-    hop_length = 256
-    n_mels=256
-    mel_f_min=0.0
-    mel_f_max=None
-    return_decibel=True
-
-    model = K.Sequential()
-    composed_melgram_layer = \
-        kapre.composed.get_melspectrogram_layer(input_shape=input_shape,
-                                                sample_rate=sample_rate,
-                                                n_fft=n_fft,
-                                                n_mels=n_mels,
-                                                mel_f_min=mel_f_min,
-                                                mel_f_max=mel_f_max,
-                                                return_decibel=return_decibel)
-
-    # decompose the layers the model can be saved
-    for layer in composed_melgram_layer.layers:
-        model.add(layer)
-
-    model.add(K.layers.BatchNormalization())
-
-    # add blocks
-    n_filters = 16
-    for block in range(num_blocks):
-        model.add(K.layers.Convolution2D(n_filters, (3, 3),
-                                       padding='same',
-                                       activation='relu',
-                                       kernel_initializer='he_normal'))
-        model.add(K.layers.BatchNormalization())
-        model.add(K.layers.Convolution2D(n_filters, (3, 3),
-                                       padding='same',
-                                       activation='relu',
-                                       kernel_initializer='he_normal'))
-        model.add(K.layers.BatchNormalization())
-        model.add(K.layers.MaxPooling2D((2,2), padding='valid'))
-
-        # double the number of filters for the next block
-        n_filters *= 2
-
-
-    # CONV SQUEEZE
-    model.add(K.layers.Convolution2D(n_filters, (1, 64),
-                                     padding='valid',
-                                     activation='relu',
-                                     kernel_initializer='he_normal'))
-    model.add(K.layers.BatchNormalization())
-    model.add(SqueezeLayer(axis=-2))
-
-    model.add(K.layers.GRU(64, return_sequences=False))
-
-    model.add(K.layers.Dense(264, activation='softmax'))
-
-    return model
 
 MODELS={
     'cnn1_audin_nmel_1':construct_cnn1_audin_nmel_1,
@@ -542,10 +460,6 @@ MODELS={
     'cnn1_audin_nffthl_2':construct_cnn1_audin_nffthl_2,
     'cnn1_audin_freq_1':construct_cnn1_audin_freq_1,
     'cnn1_audin_freq_2':construct_cnn1_audin_freq_2,
-    'milsed_2block':construct_milsed_2block_dense,
-    'milsed_3block':construct_milsed_3block_dense,
-    'milsed_4block':construct_milsed_4block_dense,
-    'milsed_5block':construct_milsed_5block_dense,
     'cnn1_audin_l2reg_1': construct_cnn1_audin_l2reg_1,
     'cnn1_audin_l2reg_2': construct_cnn1_audin_l2reg_2,
     'cnn1_audin_l2reg_3': construct_cnn1_audin_l2reg_3,
@@ -564,8 +478,5 @@ MODELS={
     'milsed_7block_dense_drp_1':construct_milsed_7block_dense_drp_1,
     'milsed_7block_dense_drp_2':construct_milsed_7block_dense_drp_2,
     'milsed_7block_dense_drp_3':construct_milsed_7block_dense_drp_3,
-    'milsed_7block_dense_drp_4':construct_milsed_7block_dense_drp_4,
-    '_construct_milsed_block_rnn':_construct_milsed_block_rnn
-
-
+    'milsed_7block_dense_drp_4':construct_milsed_7block_dense_drp_4
     }

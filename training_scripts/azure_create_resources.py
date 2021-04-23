@@ -1,4 +1,4 @@
-from azureml.core import Workspace, Dataset
+from azureml.core import Workspace, Dataset, Datastore
 from azureml.core.environment import Environment
 from azureml.core.compute import AmlCompute, ComputeTarget
 from azureml.core.environment import Environment
@@ -38,6 +38,21 @@ def parse_args():
     parser.add_argument('--create-dataset', dest='create_dataset', action='store_const',
                         const=True, default=False,
                         help='Upload the data to Azure')
+
+    parser.add_argument('--dataset-name', type=str,
+                            dest='dataset_name',
+                            default=False,
+                            help='Dataset name, defaults to default dataset')
+
+    parser.add_argument('--datastore-name', type=str,
+                            dest='datastore_name',
+                            default=False,
+                            help='Datastore name, defaults to default datastore')
+
+    parser.add_argument('--data-path', type=str,
+                            dest='data_path',
+                            default='/data',
+                            help='Path in datastore')
 
     return parser.parse_args()
 
@@ -89,6 +104,7 @@ def create_compute(ws, gpus):
 def create_env(ws):
     '''Creates an azureml enviornment'''
 
+    # Create enviornment object
     env = Environment(name='birdsong-env-gpu')
 
     # define packages for image
@@ -99,11 +115,13 @@ def create_env(ws):
                                                 'sklearn',
                                                 'kapre',
                                                 'sndfile',
-                                                'librosa'],
+                                                'librosa',
+                                                'psutil'],
                                  conda_packages=['SciPy'])
 
     env.python.conda_dependencies = cd
 
+    #Docker file
     dockerfile = r'''
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
@@ -253,34 +271,45 @@ def upload_data(ws):
 
     datastore = ws.get_default_datastore()
 
-    # upload the data to the datastore
+    # upload the mp3 files
     datastore.upload(src_dir='../data/audio_10sec',
                      target_path='/data/audio_10sec',
                      overwrite=False,
                      show_progress=True)
 
-def create_dataset(ws):
-    '''create the dataset object'''
-    datastore = ws.get_default_datastore()
+    # upload the npy files
+    datastore.upload(src_dir='../data/npy',
+                     target_path='/data/npy',
+                     overwrite=False,
+                     show_progress=True)
 
-    dataset = Dataset.File.from_files(path=(datastore, 'data/audio_10sec/'))
+def create_dataset(ws, name, datastore, data_path):
+    '''create the dataset object'''
+
+    # get the datastore
+    if datastore:
+        datastore = Datastore.get(ws, datastore)
+    else:
+        datastore = ws.get_default_datastore()
+
+    # define dataset
+    dataset = Dataset.File.from_files(path=(datastore, data_path))
 
     # register the dataset for future use
     dataset = dataset.register(workspace=ws,
-                               name='birdsongs',
-                               description='bird songs divided into train/validation/split for classification')
+                               name=name,
+                               create_new_version=True)
 
 if __name__ == '__main__':
 
+    # parse arguments
     args = parse_args()
-
     print('ARGS:', args)
 
+    # Logic
     if args.create_workspace:
-
         print('Creating workspace...')
         create_ws(args.subscription_id)
-
 
     # get the workspace
     ws = Workspace.from_config()
@@ -299,7 +328,6 @@ if __name__ == '__main__':
 
     if args.create_dataset:
         print('Defining Dataset...')
-        create_dataset(ws)
-
+        create_dataset(ws, args.dataset_name, args.datastore_name, args.data_path)
 
     print('Done.')
