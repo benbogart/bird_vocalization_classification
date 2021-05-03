@@ -3,7 +3,7 @@ Bird Sound Classification
 ![Blue-fronted redstart](images/blue-fronted-redstart.jpeg)
 Image © Aaron Travers
 
-Note: For an interactive demo visit the [project dashboard](https://birdsong-classification.herokuapp.com/) on Heroku.
+Note: For an interactive demo visit the [project dashboard](https://bird-vocalization.herokuapp.com/) on Heroku.
 
 ## Problem Description
 
@@ -497,7 +497,7 @@ For larger training sets this would need to be addressed.
 
 To upload your own recordings for prediction or to dig deeper into the metrics for the other models I have deployed a dashboard on Heroku.  The dashboard uses a Docker Container to install ffmpeg for mp3 processing to facilitate the upload and prediction.  It is build using Plotly's [Dash](https://plotly.com/dash/).  To see more on how the dashboard works visit the [dashboard repository](https://github.com/benbogart/birdsong_detection_dashboard_docker) on GitHub.
 
-[![](images/dashboard.png)](https://birdsong-classification.herokuapp.com/)
+[![](images/dashboard.png)](https://bird-vocalization.herokuapp.com/)
 
 # Future Work
 
