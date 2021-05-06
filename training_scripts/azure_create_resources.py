@@ -15,7 +15,7 @@ def parse_args():
                         help='Create a new workspace')
 
     parser.add_argument('--subscription-id', type=str,
-                            dest='subscription-id',
+                            dest='subscription_id',
                             default='',
                             help='Subscription id for creating a workspace')
 

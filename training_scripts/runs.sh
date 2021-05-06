@@ -3,9 +3,9 @@
 # # create resources
 # python azure_create_resources.py --create-workspace --subscription-id [your-subscription_id]
 #
-# python azure_create_resources.py --create-compute --gups 1
-# python azure_create_resources.py --create-compute --gups 2
-# python azure_create_resources.py --create-compute --gups 4
+# python azure_create_resources.py --create-compute --gpus 1
+# python azure_create_resources.py --create-compute --gpus 2
+# python azure_create_resources.py --create-compute --gpus 4
 #
 # python azure_create_resources.py --create-env
 #
